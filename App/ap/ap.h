@@ -12,6 +12,8 @@
 #include "utils.h"
 
 #include "led.h"
+#include "boot_indicator.h"
+#include "iwdg.h"
 
 
 void ap_init(void);

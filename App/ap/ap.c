@@ -19,13 +19,8 @@ void ap_main(void)
 {
 	while (1)
 	{
-		uint32_t now = ms_now();
-		static uint32_t prev = 0;
+		boot_indicator_tick();
 
-		if (now - prev >= 50)
-		{
-			prev = now;
-			led_toggle(LED_CH_BLUE);
-		}
+		iwdg_refresh();
 	}
 }
