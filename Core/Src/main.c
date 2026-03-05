@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "ap.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -95,7 +95,8 @@ int main(void)
   MX_IWDG_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  ap_init();
+  ap_main();
   /* USER CODE END 2 */
 
   /* Infinite loop */

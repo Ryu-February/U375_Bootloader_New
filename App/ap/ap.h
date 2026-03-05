@@ -8,6 +8,12 @@
 #ifndef AP_AP_H_
 #define AP_AP_H_
 
+
+#include "utils.h"
+
+#include "led.h"
+
+
 void ap_init(void);
 void ap_main(void);
 
