@@ -7,6 +7,7 @@
 
 #include "ap.h"
 
+#include "power.h"
 
 
 
@@ -18,7 +19,7 @@ void ap_init(void)
 	{
 		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) != 0)
 		{
-			enter_shutdown_safe();
+			power_enter_shutdown_safe();
 		}
 		delay_ms(1);
 	}
@@ -28,7 +29,7 @@ void ap_main(void)
 {
 	uint32_t pa0_press_start = 0;
 	uint8_t pa0_pressed_last = 0;
-	uint8_t standby_armed = 1;
+	uint8_t shutdown_pending = 0;
 
 	while (1)
 	{
@@ -46,17 +47,23 @@ void ap_main(void)
 			}
 			else
 			{
-				if (standby_armed && (ms_now() - pa0_press_start >= 500))//0.5초 이상 누르면 꺼지게
+				if (!shutdown_pending && (ms_now() - pa0_press_start >= 500))//0.5초 이상 눌림 → 꺼짐 예약
 				{
-					standby_armed = 0;
-					enter_shutdown_safe();
+					shutdown_pending = 1;
 				}
 			}
 		}
 		else
 		{
+			if (pa0_pressed_last)
+			{
+				if (shutdown_pending)
+				{
+					shutdown_pending = 0;
+					power_enter_shutdown_safe();
+				}
+			}
 			pa0_pressed_last = 0;
-			standby_armed = 1;
 		}
 	}
 }
