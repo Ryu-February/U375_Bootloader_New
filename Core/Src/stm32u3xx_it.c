@@ -60,6 +60,9 @@
 
 /* USER CODE END EV */
 
+#include "stm32u3xx_hal.h"
+extern UART_HandleTypeDef huart3;
+
 /******************************************************************************/
 /*           Cortex Processor Interruption and Exception Handlers          */
 /******************************************************************************/
@@ -199,5 +202,13 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief This function handles USART3 global interrupt.
+  */
+void USART3_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart3);
+}
 
 /* USER CODE END 1 */
