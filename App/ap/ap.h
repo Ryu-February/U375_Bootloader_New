@@ -14,7 +14,7 @@
 #include "led.h"
 #include "boot_indicator.h"
 #include "iwdg.h"
-#include "btn.h"
+#include "power.h"
 
 
 void ap_init(void);
