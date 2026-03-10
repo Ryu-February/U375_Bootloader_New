@@ -11,4 +11,6 @@ bool boot_update_in_progress(void);
 
 bool boot_jump_to_fw(void);
 
+void boot_JumpToFw_New(void);
+
 #endif /* BOOT_BOOT_UPDATE_H_ */

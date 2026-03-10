@@ -7,6 +7,7 @@
 #include "backup.h"
 #include "boot_mode.h"
 #include <string.h>
+#include "flash_if.h"
 
 static cmd_t s_cmd;
 
@@ -20,12 +21,113 @@ static inline uint16_t u16_le(const uint8_t *p)
   return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
+static inline uint32_t align_down(uint32_t v, uint32_t a){ return v & ~(a - 1U); }
+static inline uint32_t align_up  (uint32_t v, uint32_t a){ return (v + a - 1U) & ~(a - 1U); }
+static inline bool is_aligned(uint32_t v, uint32_t a) { return (v & (a - 1U)) == 0U; }
+
+static uint8_t boot_IsFlashRange(uint32_t addr_start, uint32_t length)
+{
+  uint8_t result = false;
+  uint32_t addr_end = addr_start + length - 1U;
+  uint32_t flash_start = FLASH_ADDR_START;
+  uint32_t flash_end = FLASH_ADDR_END;
+
+  if ((addr_start >= flash_start) && (addr_start < flash_end)
+      && (addr_end >= flash_start) && (addr_end < flash_end))
+  {
+    result = true;
+  }
+  return result;
+}
+
+static void bootCmdFlashErase(cmd_t *p_cmd)
+{
+  uint8_t err_code = CMD_OK;
+  cmd_packet_t *p_packet = &p_cmd->rx_packet;
+
+//  if (p_packet->length < 8U)
+//  {
+//    err_code = BOOT_ERR_WRONG_RANGE;
+//    cmd_SendResp(p_cmd, BOOT_CMD_FLASH_ERASE, err_code, NULL, 0);
+//    return;
+//  }
+
+  uint32_t addr   = u32_le(&p_packet->data[0]);
+  uint32_t length = u32_le(&p_packet->data[4]);
+
+  uint32_t start = align_down(addr, FLASH_PAGE_SIZE);
+  uint32_t end   = align_up(addr + length, FLASH_PAGE_SIZE);
+  uint32_t span  = end - start;
+
+  if (boot_IsFlashRange(start, span) == true)
+  {
+    if (flash_Erase_New(start, span) != true)
+    {
+      err_code = BOOT_ERR_FLASH_ERASE;
+    }
+  }
+  else
+  {
+    err_code = BOOT_ERR_WRONG_RANGE;
+  }
+
+  cmd_SendResp(p_cmd, BOOT_CMD_FLASH_ERASE, err_code, NULL, 0);
+}
+
 void boot_cmd_init(void)
 {
   cmd_Init(&s_cmd);
   cmd_Open(&s_cmd, 3, 115200);
   flash_init();
   boot_update_init(FLASH_ADDR_FW, (uint32_t)(FLASH_ADDR_END - FLASH_ADDR_FW));
+}
+
+static void bootCmdFlashWrite(cmd_t *p_cmd)
+{
+  uint8_t err_code = CMD_OK;
+  cmd_packet_t *p_packet = &p_cmd->rx_packet;
+
+//  if (p_packet->length < 8U)
+//  {
+//    err_code = BOOT_ERR_WRONG_RANGE;
+//    cmd_SendResp(p_cmd, BOOT_CMD_FLASH_WRITE, err_code, NULL, 0);
+//    return;
+//  }
+
+  uint32_t addr   = u32_le(&p_packet->data[0]);
+  uint32_t length = u32_le(&p_packet->data[4]);
+
+//  if ((uint32_t)p_packet->length < (8U + length))
+//  {
+//    err_code = BOOT_ERR_BUF_OVF;
+//    cmd_SendResp(p_cmd, BOOT_CMD_FLASH_WRITE, err_code, NULL, 0);
+//    return;
+//  }
+
+  if (length == 0U)
+  {
+    err_code = BOOT_ERR_WRONG_RANGE;
+  }
+  else if (boot_IsFlashRange(addr, length) == true)
+  {
+    if (!is_aligned(addr, FLASH_PROG_ALIGN) || ((length % FLASH_PROG_ALIGN) != 0U))
+    {
+      err_code = BOOT_ERR_WRONG_RANGE;
+    }
+    else
+    {
+      if (flash_Write_New(addr, &p_packet->data[8], length) != true)
+      {
+        err_code = BOOT_ERR_FLASH_WRITE;
+      }
+    }
+  }
+  else
+  {
+    err_code = BOOT_ERR_WRONG_RANGE;
+  }
+
+  cmd_SendResp(p_cmd, BOOT_CMD_FLASH_WRITE, err_code, NULL, 0);
 }
 
 static void handle_packet(cmd_t *pcmd)
@@ -66,59 +168,12 @@ static void handle_packet(cmd_t *pcmd)
 
 		case BOOT_CMD_FLASH_ERASE:
 		{
-		  if (pcmd->rx_packet.length < 8) { err = BOOT_ERR_WRONG_RANGE; cmd_SendResp(pcmd, BOOT_CMD_FLASH_ERASE, err, NULL, 0); break; }
-		  uint32_t addr = u32_le(&pcmd->rx_packet.data[0]);
-		  uint32_t len  = u32_le(&pcmd->rx_packet.data[4]);
-		  uint32_t eff_addr = addr;
-		  if (!(eff_addr >= FLASH_ADDR_START && eff_addr < FLASH_ADDR_END))
-		  {
-		    /* Treat as relative offset from FW base if not absolute flash address */
-		    if (addr < (FLASH_ADDR_END - FLASH_ADDR_FW))
-		    {
-		      eff_addr = FLASH_ADDR_FW + addr;
-		    }
-		  }
-		  bool ok = false;
-		  if (eff_addr >= FLASH_ADDR_START && (eff_addr + len) <= FLASH_ADDR_END)
-		  {
-		    ok = flash_erase(eff_addr, len);
-		  }
-		  err = ok ? CMD_OK : BOOT_ERR_FLASH_ERASE;
-		  cmd_SendResp(pcmd, BOOT_CMD_FLASH_ERASE, err, NULL, 0);
+		  bootCmdFlashErase(pcmd);
 		} break;
 
 		case BOOT_CMD_FLASH_WRITE:
 		{
-		  if (pcmd->rx_packet.length < 8) { err = BOOT_ERR_WRONG_RANGE; cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0); break; }
-		  uint32_t addr = u32_le(&pcmd->rx_packet.data[0]);
-		  uint32_t len  = u32_le(&pcmd->rx_packet.data[4]);
-		  if ((uint32_t)pcmd->rx_packet.length < (8U + len)) { err = BOOT_ERR_BUF_OVF; cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0); break; }
-		  const uint8_t *pl = &pcmd->rx_packet.data[8];
-		
-		  uint32_t eff_addr = addr;
-		  if (!(eff_addr >= FLASH_ADDR_START && eff_addr < FLASH_ADDR_END))
-		  {
-		    /* Treat as relative offset from FW base if not absolute flash address */
-		    if (addr < (FLASH_ADDR_END - FLASH_ADDR_FW))
-		    {
-		      eff_addr = FLASH_ADDR_FW + addr;
-		    }
-		  }
-		
-		  if ((eff_addr % FLASH_PROG_ALIGN) != 0U)
-		  {
-		    err = BOOT_ERR_WRONG_RANGE;
-		  }
-		  else if (!(eff_addr >= FLASH_ADDR_START && (eff_addr + len) <= FLASH_ADDR_END))
-		  {
-		    err = BOOT_ERR_WRONG_RANGE;
-		  }
-		  else
-		  {
-		    bool ok = flash_write(eff_addr, pl, len);
-		    err = ok ? CMD_OK : BOOT_ERR_FLASH_WRITE;
-		  }
-		  cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0);
+		  bootCmdFlashWrite(pcmd);
 		} break;
 
 

@@ -6,6 +6,7 @@
 #include "stm32u3xx_hal.h"
 #include <string.h>
 
+
 typedef struct
 {
   bool     in_progress;
@@ -136,3 +137,115 @@ bool boot_jump_to_fw(void)
   app_entry();
   return true;
 }
+#define HSI_TIMEOUT_VALUE               (2U)
+#define CLOCKSWITCH_TIMEOUT_VALUE       5000U     /* 5 s    */
+
+HW_StatusTypeDef RCC_DeInit(void)
+{
+	uint32_t tickstart;
+
+	/* Get start tick */
+	tickstart = ms_now();
+
+	/* Set MSISON and MSIKON bit */
+	SET_BIT(RCC->CR, (RCC_CR_MSISON | RCC_CR_MSIKON));
+
+	/* Wait till MSIS is ready */
+	while(READ_BIT(RCC->CR, RCC_CR_MSISRDY) == 0U)
+	{
+		if((ms_now() - tickstart) > HSI_TIMEOUT_VALUE)
+		{
+			if (READ_BIT(RCC->CR, RCC_CR_MSISRDY) == 0U)
+			{
+				return HW_TIMEOUT;
+			}
+		}
+	}
+
+	/* Select MSIS and MSIK source and divider */
+	MODIFY_REG(RCC->ICSCR1, (RCC_ICSCR1_MSISDIV | RCC_ICSCR1_MSIKDIV),
+	(RCC_ICSCR1_MSISDIV_0 | RCC_ICSCR1_MSISSEL | RCC_ICSCR1_MSIKDIV_0 | RCC_ICSCR1_MSIKSEL));
+
+	/* Set MSRCx trimming default value */
+	WRITE_REG(RCC->ICSCR2, (RCC_ICSCR2_MSITRIM1_5 | RCC_ICSCR2_MSITRIM0_5));
+
+	/* Set HSITRIM default value */
+	WRITE_REG(RCC->ICSCR3, RCC_ICSCR3_HSITRIM_4);
+
+	/* Get start tick*/
+	tickstart = ms_now();
+
+	/* Reset CFGR1 register (MSIS is selected as system clock source) */
+	CLEAR_REG(RCC->CFGR1);
+
+	/* Wait till clock switch is ready */
+	while(READ_BIT(RCC->CFGR1, RCC_CFGR1_SWS) != 0U)
+	{
+		if((ms_now() - tickstart) > CLOCKSWITCH_TIMEOUT_VALUE)
+		{
+			if(READ_BIT(RCC->CFGR1, RCC_CFGR1_SWS) != 0U)
+			{
+				return HW_TIMEOUT;
+			}
+		}
+	}
+
+	/* Set AHBx and APBx prescaler to their default values */
+	CLEAR_REG(RCC->CFGR2);
+	CLEAR_REG(RCC->CFGR3);
+	CLEAR_REG(RCC->CFGR4);
+
+	/* Clear CR register in 2 steps: first to clear HSEON in case bypass was enabled */
+	RCC->CR = (RCC_CR_MSISON | RCC_CR_MSIKON);
+
+	/* Then again to HSEBYP in case bypass was enabled */
+	RCC->CR = (RCC_CR_MSISON | RCC_CR_MSIKON);
+
+	/* Disable all interrupts */
+	CLEAR_REG(RCC->CIER);
+
+	/* Clear all interrupts flags */
+	WRITE_REG(RCC->CICR, 0xFFFFFFFFU);
+
+	/* Update the SystemCoreClock global variable */
+	SystemCoreClock = (MSIRC1_VALUE >> 1u);
+
+	/* Adapt Systick interrupt period */
+//	if(System_InitTick(uwTickPrio) != HW_OK)
+//	{
+//		return HW_ERROR;
+//	}
+//	else
+//	{
+//		return HW_OK;
+//	}
+	return HW_OK;
+}
+
+
+
+
+void boot_JumpToFw_New(void)
+{
+	void (**jump_func)(void) = (void (**)(void))(FLASH_ADDR_FW + 4);
+
+
+	if(RCC_DeInit() != HW_OK)
+	{
+		//UART3_tx_string("RCC_DeInit Error\r\n");
+	}
+
+
+	for(uint16_t i = 0; i < 16; i++)
+	{
+		NVIC->ICER[i] = 0xFFFFFFFF;
+		__DSB();
+		__ISB();
+	}
+	SysTick->CTRL = 0;
+
+	(*jump_func)();
+}
+
+
+

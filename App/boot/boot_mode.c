@@ -51,7 +51,8 @@ void boot_check_mode(void)
       {
         boot_bkp_write(BOOT_BKP_DR2, 0);
       }
-      (void)boot_jump_to_fw();
+//      boot_jump_to_fw();
+      boot_JumpToFw_New();
     }
   }
 }

@@ -16,4 +16,5 @@
 #define FLASH_ADDR_END              (FLASH_ADDR_START + (112UL) * FLASH_PAGE_SIZE)
 #define FLASH_PROG_ALIGN            8UL
 
+
 #endif /* BOOT_BOOT_CONFIG_H_ */
