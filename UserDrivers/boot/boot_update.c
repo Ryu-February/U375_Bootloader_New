@@ -227,7 +227,7 @@ HW_StatusTypeDef RCC_DeInit(void)
 
 void boot_JumpToFw_New(void)
 {
-	void (**jump_func)(void) = (void (**)(void))(FLASH_ADDR_FW + 4);
+	void (**jump_func)(void) = (void (**)(void))(FLASH_ADDR_FW + 4); // 펌웨어 시작점 주소 + 4byte
 
 
 	if(RCC_DeInit() != HW_OK)
@@ -238,12 +238,13 @@ void boot_JumpToFw_New(void)
 
 	for(uint16_t i = 0; i < 16; i++)
 	{
-		NVIC->ICER[i] = 0xFFFFFFFF;
+		NVIC->ICER[i] = 0xFFFFFFFF;	//인터럽트 다 끄는 과정
 		__DSB();
 		__ISB();
 	}
 	SysTick->CTRL = 0;
 
+	__set_MSP(*(volatile uint32_t*)FLASH_ADDR_FW);
 	(*jump_func)();
 }
 

@@ -1,4 +1,4 @@
-#include "boot_cmd.h"
+﻿#include "boot_cmd.h"
 #include "boot_update.h"
 #include "flash_if.h"
 #include "iwdg.h"
@@ -25,7 +25,7 @@ static inline uint32_t align_down(uint32_t v, uint32_t a){ return v & ~(a - 1U);
 static inline uint32_t align_up  (uint32_t v, uint32_t a){ return (v + a - 1U) & ~(a - 1U); }
 static inline bool is_aligned(uint32_t v, uint32_t a) { return (v & (a - 1U)) == 0U; }
 
-static uint8_t boot_IsFlashRange(uint32_t addr_start, uint32_t length)
+static uint8_t boot_is_flash_range(uint32_t addr_start, uint32_t length)
 {
   uint8_t result = false;
   uint32_t addr_end = addr_start + length - 1U;
@@ -40,7 +40,7 @@ static uint8_t boot_IsFlashRange(uint32_t addr_start, uint32_t length)
   return result;
 }
 
-static void bootCmdFlashErase(cmd_t *p_cmd)
+static void boot_handle_flash_erase(cmd_t *p_cmd)
 {
   uint8_t err_code = CMD_OK;
   cmd_packet_t *p_packet = &p_cmd->rx_packet;
@@ -59,9 +59,9 @@ static void bootCmdFlashErase(cmd_t *p_cmd)
   uint32_t end   = align_up(addr + length, FLASH_PAGE_SIZE);
   uint32_t span  = end - start;
 
-  if (boot_IsFlashRange(start, span) == true)
+  if (boot_is_flash_range(start, span) == true)
   {
-    if (flash_Erase_New(start, span) != true)
+    if (flash_erase_range(start, span) != true)
     {
       err_code = BOOT_ERR_FLASH_ERASE;
     }
@@ -82,7 +82,7 @@ void boot_cmd_init(void)
   boot_update_init(FLASH_ADDR_FW, (uint32_t)(FLASH_ADDR_END - FLASH_ADDR_FW));
 }
 
-static void bootCmdFlashWrite(cmd_t *p_cmd)
+static void boot_handle_flash_write(cmd_t *p_cmd)
 {
   uint8_t err_code = CMD_OK;
   cmd_packet_t *p_packet = &p_cmd->rx_packet;
@@ -108,7 +108,7 @@ static void bootCmdFlashWrite(cmd_t *p_cmd)
   {
     err_code = BOOT_ERR_WRONG_RANGE;
   }
-  else if (boot_IsFlashRange(addr, length) == true)
+  else if (boot_is_flash_range(addr, length) == true)
   {
     if (!is_aligned(addr, FLASH_PROG_ALIGN) || ((length % FLASH_PROG_ALIGN) != 0U))
     {
@@ -116,7 +116,7 @@ static void bootCmdFlashWrite(cmd_t *p_cmd)
     }
     else
     {
-      if (flash_Write_New(addr, &p_packet->data[8], length) != true)
+      if (flash_program_range_dw(addr, &p_packet->data[8], length) != true)
       {
         err_code = BOOT_ERR_FLASH_WRITE;
       }
@@ -132,107 +132,157 @@ static void bootCmdFlashWrite(cmd_t *p_cmd)
 
 static void handle_packet(cmd_t *pcmd)
 {
-	uint8_t err = CMD_OK;
+    uint8_t err = CMD_OK;
 
-	switch (pcmd->rx_packet.cmd)
-	{
-		case BOOT_CMD_READ_BOOT_VERSION:
-		{
-		  uint8_t resp[32]; memset(resp, 0, sizeof(resp));
-		  const char *s = "Bootloader - V1.0";
-		  strncpy((char*)resp, s, sizeof(resp)-1);
-		  cmd_SendResp(pcmd, BOOT_CMD_READ_BOOT_VERSION, CMD_OK, resp, 32);
-		} break;
+    switch (pcmd->rx_packet.cmd)
+    {
+        case BOOT_CMD_READ_BOOT_VERSION:
+        {
+          uint8_t resp[32]; memset(resp, 0, sizeof(resp));
+          const char *s = "Bootloader - V1.0";
+          strncpy((char*)resp, s, sizeof(resp)-1);
+          cmd_SendResp(pcmd, BOOT_CMD_READ_BOOT_VERSION, CMD_OK, resp, 32);
+        } break;
 
-		case BOOT_CMD_READ_BOOT_NAME:
-		{
-		  uint8_t resp[32]; memset(resp, 0, sizeof(resp));
-		  const char *s = "KIBO - Bootloader";
-		  strncpy((char*)resp, s, sizeof(resp)-1);
-		  cmd_SendResp(pcmd, BOOT_CMD_READ_BOOT_NAME, CMD_OK, resp, 32);
-		} break;
+        case BOOT_CMD_READ_BOOT_NAME:
+        {
+          uint8_t resp[32]; memset(resp, 0, sizeof(resp));
+          const char *s = "KIBO - Bootloader";
+          strncpy((char*)resp, s, sizeof(resp)-1);
+          cmd_SendResp(pcmd, BOOT_CMD_READ_BOOT_NAME, CMD_OK, resp, 32);
+        } break;
 
-		case BOOT_CMD_READ_FIRM_VERSION:
-		{
-		  uint8_t resp[32];
-		  memcpy(resp, (const void*)FLASH_ADDR_FW_VER, 32);
-		  cmd_SendResp(pcmd, BOOT_CMD_READ_FIRM_VERSION, CMD_OK, resp, 32);
-		} break;
+        case BOOT_CMD_READ_FIRM_VERSION:
+        {
+          uint8_t resp[32];
+          memcpy(resp, (const void*)FLASH_ADDR_FW_VER, 32);
+          cmd_SendResp(pcmd, BOOT_CMD_READ_FIRM_VERSION, CMD_OK, resp, 32);
+        } break;
 
-		case BOOT_CMD_READ_FIRM_NAME:
-		{
-		  uint8_t resp[32];
-		  memcpy(resp, (const void*)(FLASH_ADDR_FW_VER + 32U), 32);
-		  cmd_SendResp(pcmd, BOOT_CMD_READ_FIRM_NAME, CMD_OK, resp, 32);
-		} break;
+        case BOOT_CMD_READ_FIRM_NAME:
+        {
+          uint8_t resp[32];
+          memcpy(resp, (const void*)(FLASH_ADDR_FW_VER + 32U), 32);
+          cmd_SendResp(pcmd, BOOT_CMD_READ_FIRM_NAME, CMD_OK, resp, 32);
+        } break;
 
-		case BOOT_CMD_FLASH_ERASE:
-		{
-		  bootCmdFlashErase(pcmd);
-		} break;
-
-		case BOOT_CMD_FLASH_WRITE:
-		{
-		  bootCmdFlashWrite(pcmd);
-		} break;
-
-
-		case BOOT_CMD_LED_CONTROL:
-		{
-		  if (pcmd->rx_packet.length < 1) { err = BOOT_ERR_LED; }
-		  else
-		  {
-			uint8_t v = pcmd->rx_packet.data[0];
-			if (v == 0)      { led_off(LED_CH_BLUE); }
-			else if (v == 1) { led_on(LED_CH_BLUE); }
-			else if (v == 2) { led_toggle(LED_CH_BLUE); }
-			else             { err = BOOT_ERR_LED; }
-		  }
-		  cmd_SendResp(pcmd, BOOT_CMD_LED_CONTROL, err, NULL, 0);
-		} break;
-
-		case BOOT_CMD_WRITE_STOP:
-		{
-		  if (boot_update_in_progress())
-		  {
-			(void)boot_update_end(false);
-		  }
-		  cmd_SendResp(pcmd, BOOT_CMD_WRITE_STOP, CMD_OK, NULL, 0);
-		} break;
-
-		case BOOT_CMD_JUMP_TO_FW:
-		{
-		  if (boot_verify_fw())
-		  {
-			if (boot_verify_crc())
+        case BOOT_CMD_FLASH_ERASE:
+        {
+//          boot_handle_flash_erase(pcmd);
+        	if (pcmd->rx_packet.length < 8) { err = BOOT_ERR_WRONG_RANGE; cmd_SendResp(pcmd, BOOT_CMD_FLASH_ERASE, err, NULL, 0); break; }
+			uint32_t addr = u32_le(&pcmd->rx_packet.data[0]);
+			uint32_t len  = u32_le(&pcmd->rx_packet.data[4]);
+			uint32_t eff_addr = addr;
+			if (!(eff_addr >= FLASH_ADDR_START && eff_addr < FLASH_ADDR_END))
 			{
-			  cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, CMD_OK, NULL, 0);
-			  HAL_Delay(100);
-			  boot_bkp_write(BOOT_BKP_DR2, 1);
-			  NVIC_SystemReset();
-			}
-			else
+			/* Treat as relative offset from FW base if not absolute flash address */
+			if (addr < (FLASH_ADDR_END - FLASH_ADDR_FW))
 			{
-			  cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, BOOT_ERR_FW_CRC, NULL, 0);
+				eff_addr = FLASH_ADDR_FW + addr;
 			}
-		  }
-		  else
-		  {
-			cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, BOOT_ERR_INVALID_FW, NULL, 0);
-		  }
-		} break;
+			}
+			bool ok = false;
+			if (eff_addr >= FLASH_ADDR_START && (eff_addr + len) <= FLASH_ADDR_END)
+			{
+				ok = flash_erase(eff_addr, len);
+			}
+			err = ok ? CMD_OK : BOOT_ERR_FLASH_ERASE;
+			cmd_SendResp(pcmd, BOOT_CMD_FLASH_ERASE, err, NULL, 0);
+        } break;
 
-		default:
-		  err = BOOT_ERR_WRONG_CMD;
-		  cmd_SendResp(pcmd, pcmd->rx_packet.cmd, err, NULL, 0);
-		  break;
-		}
+        case BOOT_CMD_FLASH_WRITE:
+        {
+//          boot_handle_flash_write(pcmd);
+        	if (pcmd->rx_packet.length < 8) { err = BOOT_ERR_WRONG_RANGE; cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0); break; }
+        			  uint32_t addr = u32_le(&pcmd->rx_packet.data[0]);
+        			  uint32_t len  = u32_le(&pcmd->rx_packet.data[4]);
+        			  if ((uint32_t)pcmd->rx_packet.length < (8U + len)) { err = BOOT_ERR_BUF_OVF; cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0); break; }
+        			  const uint8_t *pl = &pcmd->rx_packet.data[8];
+
+        			  uint32_t eff_addr = addr;
+        			  if (!(eff_addr >= FLASH_ADDR_START && eff_addr < FLASH_ADDR_END))
+        			  {
+        			    /* Treat as relative offset from FW base if not absolute flash address */
+        			    if (addr < (FLASH_ADDR_END - FLASH_ADDR_FW))
+        			    {
+        			      eff_addr = FLASH_ADDR_FW + addr;
+        			    }
+        			  }
+
+        			  if ((eff_addr % FLASH_PROG_ALIGN) != 0U)
+        			  {
+        			    err = BOOT_ERR_WRONG_RANGE;
+        			  }
+        			  else if (!(eff_addr >= FLASH_ADDR_START && (eff_addr + len) <= FLASH_ADDR_END))
+        			  {
+        			    err = BOOT_ERR_WRONG_RANGE;
+        			  }
+        			  else
+        			  {
+        			    bool ok = flash_write(eff_addr, pl, len);
+        			    err = ok ? CMD_OK : BOOT_ERR_FLASH_WRITE;
+        			  }
+        			  cmd_SendResp(pcmd, BOOT_CMD_FLASH_WRITE, err, NULL, 0);
+        } break;
+
+
+        case BOOT_CMD_LED_CONTROL:
+        {
+          if (pcmd->rx_packet.length < 1) { err = BOOT_ERR_LED; }
+          else
+          {
+            uint8_t v = pcmd->rx_packet.data[0];
+            if (v == 0)      { led_off(LED_CH_BLUE); }
+            else if (v == 1) { led_on(LED_CH_BLUE); }
+            else if (v == 2) { led_toggle(LED_CH_BLUE); }
+            else             { err = BOOT_ERR_LED; }
+          }
+          cmd_SendResp(pcmd, BOOT_CMD_LED_CONTROL, err, NULL, 0);
+        } break;
+
+        case BOOT_CMD_WRITE_STOP:
+        {
+          if (boot_update_in_progress())
+          {
+            (void)boot_update_end(false);
+          }
+          cmd_SendResp(pcmd, BOOT_CMD_WRITE_STOP, CMD_OK, NULL, 0);
+        } break;
+
+        case BOOT_CMD_JUMP_TO_FW:
+        {
+          if (boot_verify_fw())
+          {
+            if (boot_verify_crc())
+            {
+              cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, CMD_OK, NULL, 0);
+              HAL_Delay(100);
+              boot_bkp_write(BOOT_BKP_DR2, 1);
+              NVIC_SystemReset();
+            }
+            else
+            {
+              cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, BOOT_ERR_FW_CRC, NULL, 0);
+            }
+          }
+          else
+          {
+            cmd_SendResp(pcmd, BOOT_CMD_JUMP_TO_FW, BOOT_ERR_INVALID_FW, NULL, 0);
+          }
+        } break;
+
+        default:
+          err = BOOT_ERR_WRONG_CMD;
+          cmd_SendResp(pcmd, pcmd->rx_packet.cmd, err, NULL, 0);
+          break;
+        }
 }
 
 void boot_cmd_process(void)
 {
-	if (cmd_ReceivePacket(&s_cmd))
-	{
-	  handle_packet(&s_cmd);
-	}
+    if (cmd_ReceivePacket(&s_cmd))
+    {
+    	handle_packet(&s_cmd);
+    }
 }
+

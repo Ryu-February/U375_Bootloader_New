@@ -1,4 +1,4 @@
-#include "flash_if.h"
+﻿#include "flash_if.h"
 #include "utils.h"
 //#include "stm32u3xx_hal_flash.h"
 //#include "stm32u3xx_hal_flash_ex.h"
@@ -156,147 +156,147 @@ bool flash_write(uint32_t addr, const uint8_t *p_data, uint32_t length)
 
 HW_StatusTypeDef FLASH_Unlock(void)
 {
-	HW_StatusTypeDef status = HW_OK;
+    HW_StatusTypeDef status = HW_OK;
 
-	if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
-	{
-		/* Authorize the FLASH Registers access */
-		WRITE_REG(FLASH->KEYR, FLASH_KEY1);
-		WRITE_REG(FLASH->KEYR, FLASH_KEY2);
+    if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
+    {
+        /* Authorize the FLASH Registers access */
+        WRITE_REG(FLASH->KEYR, FLASH_KEY1);
+        WRITE_REG(FLASH->KEYR, FLASH_KEY2);
 
-		/* Verify Flash is unlocked */
-		if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
-		{
-			status = HW_ERROR;
-		}
-	}
+        /* Verify Flash is unlocked */
+        if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
+        {
+            status = HW_ERROR;
+        }
+    }
 
-	return status;
+    return status;
 }
 
 HW_StatusTypeDef FLASH_Lock(void)
 {
-	HW_StatusTypeDef status = HW_ERROR;
+    HW_StatusTypeDef status = HW_ERROR;
 
-	/* Set the LOCK Bit to lock the FLASH Registers access */
-	SET_BIT(FLASH->CR, FLASH_CR_LOCK);
+    /* Set the LOCK Bit to lock the FLASH Registers access */
+    SET_BIT(FLASH->CR, FLASH_CR_LOCK);
 
-	/* Verify Flash is locked */
-	if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
-	{
-		status = HW_OK;
-	}
+    /* Verify Flash is locked */
+    if(READ_BIT(FLASH->CR, FLASH_CR_LOCK) != RESET)
+    {
+        status = HW_OK;
+    }
 
-	return status;
+    return status;
 }
 
 
-uint8_t flash_Write_New(uint32_t addr, uint8_t *p_data, uint32_t length)
+uint8_t flash_program_range_dw(uint32_t addr, uint8_t *p_data, uint32_t length)
 {
-	uint8_t result = true;
-	uint8_t error_status = 0;
+    uint8_t result = true;
+    uint8_t error_status = 0;
 
-	/* U385 requires 8B-aligned address & length, and full DW programming */
-	if(((addr % 8U) != 0U) || ((length % 8U) != 0U) || (addr < FLASH_START_ADDR))
-	{
-		return false;
-	}
+    /* U385 requires 8B-aligned address & length, and full DW programming */
+    if(((addr % 8U) != 0U) || ((length % 8U) != 0U) || (addr < FLASH_START_ADDR))
+    {
+        return false;
+    }
 
-	error_status = FLASH_Unlock();
+    error_status = FLASH_Unlock();
 
-	if(error_status)
-	{
-		return false;
-	}
+    if(error_status)
+    {
+        return false;
+    }
 
-	/* write in 8-byte units */
-	for(uint32_t i = 0; i < length; i += 8U)
-	{
-		//uint16_t data = (uint16_t)(p_data[i + 1] << 8) + p_data[i];
-		uint64_t data =
-			((uint64_t)p_data[i + 0])       |
-			((uint64_t)p_data[i + 1] << 8)  |
-			((uint64_t)p_data[i + 2] << 16) |
-			((uint64_t)p_data[i + 3] << 24) |
-			((uint64_t)p_data[i + 4] << 32) |
-			((uint64_t)p_data[i + 5] << 40) |
-			((uint64_t)p_data[i + 6] << 48) |
-			((uint64_t)p_data[i + 7] << 56);
+    /* write in 8-byte units */
+    for(uint32_t i = 0; i < length; i += 8U)
+    {
+        //uint16_t data = (uint16_t)(p_data[i + 1] << 8) + p_data[i];
+        uint64_t data =
+            ((uint64_t)p_data[i + 0])       |
+            ((uint64_t)p_data[i + 1] << 8)  |
+            ((uint64_t)p_data[i + 2] << 16) |
+            ((uint64_t)p_data[i + 3] << 24) |
+            ((uint64_t)p_data[i + 4] << 32) |
+            ((uint64_t)p_data[i + 5] << 40) |
+            ((uint64_t)p_data[i + 6] << 48) |
+            ((uint64_t)p_data[i + 7] << 56);
 
-		if(FLASH_Write_Ex(addr + i, data) != HW_OK)
-		{
-			result = false;
-			break;
-		}
-	}
+        if(FLASH_Write_Ex(addr + i, data) != HW_OK)
+        {
+            result = false;
+            break;
+        }
+    }
 
-	FLASH_Lock();
+    FLASH_Lock();
 
-	return result;
+    return result;
 }
 
 HW_StatusTypeDef FLASH_Wait_LastOperation(uint16_t timeout)
 {
-	HW_StatusTypeDef status = HW_OK;
+    HW_StatusTypeDef status = HW_OK;
 
-	uint32_t tickStart = ms_now();
+    uint32_t tickStart = ms_now();
 
-	while(READ_BIT(FLASH->SR, FLASH_SR_BSY))
-	{
-		if(ms_now() - tickStart >= timeout)
-		{
-			status = HW_TIMEOUT;
-			break;
-		}
-	}
+    while(READ_BIT(FLASH->SR, FLASH_SR_BSY))
+    {
+        if(ms_now() - tickStart >= timeout)
+        {
+            status = HW_TIMEOUT;
+            break;
+        }
+    }
 
-	/* Check FLASH End of Operation flag  */
-	if(READ_BIT(FLASH->SR, FLASH_SR_EOP))
-	{
-		/* Clear FLASH End of Operation pending bit */
-		WRITE_REG(FLASH->SR, FLASH_SR_EOP);
-	}
+    /* Check FLASH End of Operation flag  */
+    if(READ_BIT(FLASH->SR, FLASH_SR_EOP))
+    {
+        /* Clear FLASH End of Operation pending bit */
+        WRITE_REG(FLASH->SR, FLASH_SR_EOP);
+    }
 
-	return status;
+    return status;
 }
 
 
 HW_StatusTypeDef FLASH_Write_Ex(uint32_t PageAddr, uint64_t data)
 {
-	HW_StatusTypeDef status = HW_OK;
+    HW_StatusTypeDef status = HW_OK;
 
     if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) == HW_OK)
     {
-		/* Address must be DW-aligned and we always write a full DW */
-		uint32_t primask_bit;
-		if(PageAddr & 0x7U)
-		{
-			return HW_ERROR;
-		}
-		// 에러/완료 플래그는 1로 써서 미리 클리어해 두는 습관 권장
-		WRITE_REG(FLASH->SR, FLASH_SR_EOP | FLASH_SR_WRPERR | FLASH_SR_PGSERR | FLASH_SR_OPERR);
+        /* Address must be DW-aligned and we always write a full DW */
+        uint32_t primask_bit;
+        if(PageAddr & 0x7U)
+        {
+            return HW_ERROR;
+        }
+        // 에러/완료 플래그는 1로 써서 미리 클리어해 두는 습관 권장
+        WRITE_REG(FLASH->SR, FLASH_SR_EOP | FLASH_SR_WRPERR | FLASH_SR_PGSERR | FLASH_SR_OPERR);
 
-		/* Enter critical section: Disable interrupts to avoid any interruption during the loop */
+        /* Enter critical section: Disable interrupts to avoid any interruption during the loop */
         primask_bit = __get_PRIMASK();
-		__disable_irq();
+        __disable_irq();
 
-    	/* Set FLASH_CR_PG bit --------------------------------------------- */
+        /* Set FLASH_CR_PG bit --------------------------------------------- */
         SET_BIT(FLASH->CR, FLASH_CR_PG);
         __DSB(); __ISB();
 
-		/* Write(Program) the double-word ---------------------------------- */
-		*(__IO uint32_t *)(PageAddr    ) = (uint32_t)(data & 0xFFFFFFFFULL); // 하위 32비트 먼저
-		*(__IO uint32_t *)(PageAddr + 4) = (uint32_t)(data >> 32);           // 상위 32비트
+        /* Write(Program) the double-word ---------------------------------- */
+        *(__IO uint32_t *)(PageAddr    ) = (uint32_t)(data & 0xFFFFFFFFULL); // 하위 32비트 먼저
+        *(__IO uint32_t *)(PageAddr + 4) = (uint32_t)(data >> 32);           // 상위 32비트
 
-		__DSB(); __ISB();
+        __DSB(); __ISB();
 
-		/* Exit critical section: restore previous priority mask */
-	    __set_PRIMASK(primask_bit);
+        /* Exit critical section: restore previous priority mask */
+        __set_PRIMASK(primask_bit);
 
-	    if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) != HW_OK)
-		{
-			status = HW_ERROR;
-		}
+        if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) != HW_OK)
+        {
+            status = HW_ERROR;
+        }
 
         CLEAR_BIT(FLASH->CR, FLASH_CR_PG);
 
@@ -305,22 +305,22 @@ HW_StatusTypeDef FLASH_Write_Ex(uint32_t PageAddr, uint64_t data)
     }
     else
     {
-    	status = HW_ERROR;
+        status = HW_ERROR;
     }
 
-	return status;
+    return status;
 }
 
 
 HW_StatusTypeDef FLASH_InSector_Page(uint32_t addr, Flash_Page_t *pageData)
 {
-	HW_StatusTypeDef status = HW_OK;
+    HW_StatusTypeDef status = HW_OK;
 
-	if(addr < FLASH_MAIN_BASE || addr >= (FLASH_MAIN_BASE + 2U*FLASH_BANK_SIZE))
-	{
-		status = HW_ERROR;
-		return status;
-	}
+    if(addr < FLASH_MAIN_BASE || addr >= (FLASH_MAIN_BASE + 2U*FLASH_BANK_SIZE))
+    {
+        status = HW_ERROR;
+        return status;
+    }
 
     const uint32_t boundary = FLASH_MAIN_BASE + FLASH_BANK_SIZE;
     //const uint32_t swapped  = FLASH_IsBankSwapped();
@@ -330,21 +330,21 @@ HW_StatusTypeDef FLASH_InSector_Page(uint32_t addr, Flash_Page_t *pageData)
 
     if(addr < boundary)
     {
-    	bank = FLASH_BANK_1;
-    	bank_base = FLASH_MAIN_BASE;
+        bank = FLASH_BANK_1;
+        bank_base = FLASH_MAIN_BASE;
     }
     else
     {
-    	bank = FLASH_BANK_2;
-    	bank_base = boundary;
+        bank = FLASH_BANK_2;
+        bank_base = boundary;
     }
 
     uint32_t offset = addr - bank_base;
     uint8_t page   = (uint8_t)(offset / FLASH_PAGE_SIZE);
     if(page >= FLASH_PAGES_PER_BANK)
     {
-    	status = HW_ERROR;
-    	return status;
+        status = HW_ERROR;
+        return status;
     }
 
     pageData->bank = bank;
@@ -357,116 +357,117 @@ HW_StatusTypeDef FLASH_InSector_Page(uint32_t addr, Flash_Page_t *pageData)
 
 HW_StatusTypeDef FLASH_Erase_Ex(uint32_t PageAddr, uint8_t PageNum)
 {
-	HW_StatusTypeDef status = HW_OK;
+    HW_StatusTypeDef status = HW_OK;
 
     if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) == HW_OK)
     {
-		Flash_Page_t pageData;
-		if(FLASH_InSector_Page(PageAddr, &pageData) == HW_OK)
-		{
-			/* Loop over N pages */
-			for(uint32_t i = 0; i < (uint32_t)PageNum; i++)
-			{
-				/* Select bank */
-				if((pageData.bank & FLASH_BANK_1) != 0U) { CLEAR_BIT(FLASH->CR, FLASH_CR_BKER); }
-				else                                     { SET_BIT(FLASH->CR, FLASH_CR_BKER);   }
+        Flash_Page_t pageData;
+        if(FLASH_InSector_Page(PageAddr, &pageData) == HW_OK)
+        {
+            /* Loop over N pages */
+            for(uint32_t i = 0; i < (uint32_t)PageNum; i++)
+            {
+                /* Select bank */
+                if((pageData.bank & FLASH_BANK_1) != 0U) { CLEAR_BIT(FLASH->CR, FLASH_CR_BKER); }
+                else                                     { SET_BIT(FLASH->CR, FLASH_CR_BKER);   }
 
-				/* Program page number (current page = base page + i) and start erase */
-				MODIFY_REG(FLASH->CR,
-						   (FLASH_CR_PNB | FLASH_CR_PER | FLASH_CR_STRT),
-						   (((uint32_t)(pageData.page + i) << FLASH_CR_PNB_Pos) | FLASH_CR_PER | FLASH_CR_STRT));
+                /* Program page number (current page = base page + i) and start erase */
+                MODIFY_REG(FLASH->CR,
+                           (FLASH_CR_PNB | FLASH_CR_PER | FLASH_CR_STRT),
+                           (((uint32_t)(pageData.page + i) << FLASH_CR_PNB_Pos) | FLASH_CR_PER | FLASH_CR_STRT));
 
-				/* Wait complete */
-				if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) != HW_OK)
-				{
-					status = HW_ERROR;
-					break;
-				}
+                /* Wait complete */
+                if(FLASH_Wait_LastOperation(FLASH_TIMEOUT_VALUE) != HW_OK)
+                {
+                    status = HW_ERROR;
+                    break;
+                }
 
-				/* Clear control bits for next iteration */
-				CLEAR_BIT(FLASH->CR, FLASH_CR_PER | FLASH_CR_PNB);
-			}
-			/* Clear bank select bit after loop */
-			CLEAR_BIT(FLASH->CR, FLASH_CR_BKER);
-		}
-		else
-		{
-			status = HW_ERROR;
-		}
+                /* Clear control bits for next iteration */
+                CLEAR_BIT(FLASH->CR, FLASH_CR_PER | FLASH_CR_PNB);
+            }
+            /* Clear bank select bit after loop */
+            CLEAR_BIT(FLASH->CR, FLASH_CR_BKER);
+        }
+        else
+        {
+            status = HW_ERROR;
+        }
     }
     else
     {
-    	status = HW_ERROR;
+        status = HW_ERROR;
     }
 
-	return status;
+    return status;
 }
 
 
 uint8_t flash_InSector(uint32_t num, uint32_t addr, uint32_t length)
 {
-	uint8_t result = false;
+    uint8_t result = false;
 
-	uint32_t sector_start, sector_end;
-	uint32_t flash_start, flash_end;
+    uint32_t sector_start, sector_end;
+    uint32_t flash_start, flash_end;
 
-	sector_start = flash_table[num].addr;
-	sector_end = flash_table[num].addr + flash_table[num].length - 1;
-	flash_start = addr;
-	flash_end = addr + length - 1;
+    sector_start = flash_table[num].addr;
+    sector_end = flash_table[num].addr + flash_table[num].length - 1;
+    flash_start = addr;
+    flash_end = addr + length - 1;
 
-	if(sector_start >= flash_start && sector_start <= flash_end)
-		result = true;
-	if(sector_end >= flash_start && sector_end <= flash_end)
-		result = true;
-	if(flash_start >= sector_start && flash_start <= sector_end)
-		result = true;
-	if(flash_end >= sector_start && flash_end <= sector_end)
-		result = true;
+    if(sector_start >= flash_start && sector_start <= flash_end)
+        result = true;
+    if(sector_end >= flash_start && sector_end <= flash_end)
+        result = true;
+    if(flash_start >= sector_start && flash_start <= sector_end)
+        result = true;
+    if(flash_end >= sector_start && flash_end <= sector_end)
+        result = true;
 
-	return result;
+    return result;
 }
 
 
-uint8_t flash_Erase_New(uint32_t addr, uint32_t length)
+uint8_t flash_erase_range(uint32_t addr, uint32_t length)
 {
-	uint8_t result = false;
-	uint8_t error_status = 0;
+    uint8_t result = false;
+    uint8_t error_status = 0;
 
-	int16_t start_sectorNum = -1;
-	uint8_t sectorNum = 0;
+    int16_t start_sectorNum = -1;
+    uint8_t sectorNum = 0;
 
-	uint32_t PageAddress = 0;
+    uint32_t PageAddress = 0;
 
-	for(uint16_t i = 0; i < FLASH_SECTOR_MAX; i++)
-	{
-		if(flash_InSector(i, addr, length) == true)
-		{
-			if(start_sectorNum < 0)
-				start_sectorNum = i;
+    for(uint16_t i = 0; i < FLASH_SECTOR_MAX; i++)
+    {
+        if(flash_InSector(i, addr, length) == true)
+        {
+            if(start_sectorNum < 0)
+                start_sectorNum = i;
 
-			sectorNum++;
-		}
-	}
+            sectorNum++;
+        }
+    }
 
-	if(sectorNum)
-	{
-		PageAddress = flash_table[start_sectorNum].addr;
+    if(sectorNum)
+    {
+        PageAddress = flash_table[start_sectorNum].addr;
 
-		FLASH_Unlock();
+        FLASH_Unlock();
 
-		error_status = FLASH_Erase_Ex(PageAddress, sectorNum);
-		//error_status = FLASH_Erase(PageAddress, sectorNum);
-		//error_status = FLASH_ErasePage(PageAddress, sectorNum);
+        error_status = FLASH_Erase_Ex(PageAddress, sectorNum);
+        //error_status = FLASH_Erase(PageAddress, sectorNum);
+        //error_status = FLASH_ErasePage(PageAddress, sectorNum);
 
-		if(error_status == 0)
-		{
-			result = true;
-		}
+        if(error_status == 0)
+        {
+            result = true;
+        }
 
-		FLASH_Lock();
+        FLASH_Lock();
 
-	}
+    }
 
-	return result;
+    return result;
 }
+
