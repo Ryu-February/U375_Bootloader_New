@@ -41,7 +41,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+extern UART_HandleTypeDef huart3;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,9 +59,6 @@
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
-
-#include "stm32u3xx_hal.h"
-extern UART_HandleTypeDef huart3;
 
 /******************************************************************************/
 /*           Cortex Processor Interruption and Exception Handlers          */
